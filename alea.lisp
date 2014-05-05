@@ -19,54 +19,92 @@
 ;;; sub-thread: define hooks, then read-message-loop on the connection
 
 (defclass session ()
-  ((connection
-    :initarg :connection
-    :initform (error "Must supply a connection")
-    :accessor connection
-    :documentation "cl-irc connection")
+  ((session-name
+    :initarg :session-name
+    :initform (error "Must supply session-name")
+    :reader session-name)
+   (nickname
+    :initarg :nickname
+    :initform (error "Must supply nickname")
+    :reader nickname)
+   (host
+    :initarg :host
+    :initform (error "Must supply host")
+    :reader host)
+   (port
+    :initarg :port
+    :initform 6667
+    :reader port)
    (channel
     :initarg :channel
     :initform (error "Must supply channel")
-    :accessor channel
-    :documentation "Channel to join")))
+    :reader channel)
+   (connection
+    :initarg :connection
+    :initform nil
+    :accessor connection
+    :documentation "cl-irc connection")
+   (handler
+    :initform nil)))
+
+(defmethod initialize-instance :after ((session session) &key)
+  (setf (slot-value session 'handler) (curry #'handle-clirc-message session)))
+
+(defgeneric session-connect (session))
+(defmethod session-connect ((session session))
+  (with-accessors ((host host)
+                   (port port)
+                   (nickname nickname)
+                   (connection connection)) session
+    (setf connection (cl-irc:connect :nickname nickname :server host :port port))
+    (setup-hooks session)
+    session))
 
 (defgeneric handle-clirc-message (session message))
 
+(defmethod handle-clirc-message ((session session) (message cl-irc:irc-err_nicknameinuse-message))
+  ;; Need to generate a new nickname and switch to that.
+  t)
+
+
 (defmethod handle-clirc-message ((session session) (message cl-irc:irc-rpl_welcome-message))
+  (format t "~A~%" (describe (connection session)))
+  (format t "~A~%" (describe message))
   (cl-irc:join (connection session) (channel session)))
 
 (defmethod handle-clirc-message ((session session) (message cl-irc:irc-privmsg-message))
-  (format t "~A~%" (describe (connection session)))
-  (format t "~A~%" (describe message))
-  t)
+  (let* ((connection (connection session))
+         (nickname (cl-irc:nickname (cl-irc:user connection)))
+         (destination (if (string-equal (first (cl-irc:arguments message)) nickname)
+                          (cl-irc:source message)
+                          (first (cl-irc:arguments message)))))
+    (cl-irc:privmsg connection destination (second (cl-irc:arguments message)))))
 
 (defun setup-hooks (session)
   (let ((connection (connection session))
-        (handler (curry #'handle-clirc-message session)))
-    (cl-irc:remove-hooks connection 'cl-irc:irc-privmsg-message)
-    (cl-irc:add-hook connection 'cl-irc:irc-privmsg-message handler)
-    (cl-irc:add-hook connection 'cl-irc:irc-rpl_welcome-message handler)))
+        (hook-types (mapcar (lambda (m) (class-name (second (sb-mop:method-specializers m)))) (sb-mop:generic-function-methods #'handle-clirc-message)))
+        (handler (slot-value session 'handler)))
+    (dolist (type hook-types)
+      (cl-irc:remove-hook connection type handler)
+      (cl-irc:add-hook connection type handler))))
 
-(defun worker (host port nick channel)
-  (let* ((connection (cl-irc:connect :nickname nick
-                                     :server host
-                                     :port port))
-         (session (make-instance 'session
-                                 :connection connection
-                                 :channel channel)))
-    (setup-hooks session)
-    (cl-irc:read-message-loop connection)))
+(defun worker (session)
+  (session-connect session)
+  (cl-irc:read-message-loop (connection session)))
 
 ;;; main thread: make connection, hand off to subthread to process
 ;;; or nope, just create the thread and tell it to connect
 
 ;;; we need to wait to join until we see CL-IRC:IRC-RPL_WELCOME-MESSAGE
 
-(defvar *connections* (make-hash-table :test 'equal))
+(defvar *sessions* (make-hash-table :test 'equal))
 
 (defun connect (name host port nick channel)
-    (let ((stdout *standard-output*)
-          (threadname (format nil "irc-handler-~S" name)))
-      (sb-thread:make-thread (lambda ()
-                               (let ((*standard-output* stdout))
-                                 (worker host port nick channel))) :name threadname)))
+  (let ((session (make-instance 'session :session-name name :nickname nick :host host :port port :channel channel))
+        (stdout *standard-output*)
+        (threadname (format nil "irc-handler-~S" name)))
+    (setf (gethash name *sessions*) session)
+    (sb-thread:make-thread (lambda ()
+                             (let ((*standard-output* stdout))
+                               (worker session))) :name threadname)
+    session))
