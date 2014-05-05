@@ -80,9 +80,16 @@
                           (first (cl-irc:arguments message)))))
     (cl-irc:privmsg connection destination (second (cl-irc:arguments message)))))
 
+(defun gather-handler-types ()
+  "generic-function-methods gets the method metaobjects for the generic function. then method-specializers returns the two class specializers for the method; the second one is the class metaobject for the message, so calling class-name on it gets the symbol we need"
+  (let ((methods (sb-mop:generic-function-methods #'handle-clirc-message))
+        (extractor (lambda (method)
+                     (class-name (second (sb-mop:method-specializers method))))))
+    (mapcar extractor methods)))
+
 (defun setup-hooks (session)
   (let ((connection (connection session))
-        (hook-types (mapcar (lambda (m) (class-name (second (sb-mop:method-specializers m)))) (sb-mop:generic-function-methods #'handle-clirc-message)))
+        (hook-types (gather-handler-types))
         (handler (slot-value session 'handler)))
     (dolist (type hook-types)
       (cl-irc:remove-hook connection type handler)
