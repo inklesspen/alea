@@ -6,12 +6,6 @@
 
 ;;; hooks: listen for commands
 
-(defun privmsg-hook (message)
-  (format t "~A~%" (describe message))
-  (format t "~A~%" (cl-irc:arguments message))
-  (format t "~A~%" (cl-irc:source message))
-  t)
-
 ;;; !roll something
 ;;; Alea: roll something
 ;;; ! syntax doesn't squawk on errors; nick-syntax does
@@ -44,6 +38,11 @@
     :initform nil
     :accessor connection
     :documentation "cl-irc connection")
+   (sigil
+    :documentation "The command character such as !"
+    :initform #\!
+    :initarg :sigil
+    :reader sigil)
    (handler
     :initform nil)))
 
@@ -66,19 +65,46 @@
   ;; Need to generate a new nickname and switch to that.
   t)
 
+;; TODO some nickserv integration. it seems to work mainly with NOTICE from NickServ.
+
 
 (defmethod handle-clirc-message ((session session) (message cl-irc:irc-rpl_welcome-message))
   (format t "~A~%" (describe (connection session)))
   (format t "~A~%" (describe message))
   (cl-irc:join (connection session) (channel session)))
 
+(defun strict-commandp (message session)
+  "A command is 'strict' if it begins with the bot's name or is in a private message."
+  (let* ((bot-nickname (cl-irc:nickname (cl-irc:user (connection session))))
+         (arguments (cl-irc:arguments message))
+         (recipient (first arguments))
+         (potential-command (second arguments)))
+    (or (alexandria:starts-with-subseq bot-nickname potential-command :test #'string-equal)
+        (string-equal bot-nickname recipient))))
+
+(defun commandp (message session)
+  (let* ((sigil (sigil session))
+         (potential-command (second (cl-irc:arguments message)))
+         (first-char (char potential-command 0)))
+    (or (eql sigil first-char) (strict-commandp message session))))
+
 (defmethod handle-clirc-message ((session session) (message cl-irc:irc-privmsg-message))
   (let* ((connection (connection session))
          (nickname (cl-irc:nickname (cl-irc:user connection)))
-         (destination (if (string-equal (first (cl-irc:arguments message)) nickname)
+         (arguments (cl-irc:arguments message))
+         (is-privmsg (string-equal (first arguments) nickname))
+         (destination (if is-privmsg
                           (cl-irc:source message)
-                          (first (cl-irc:arguments message)))))
-    (cl-irc:privmsg connection destination (second (cl-irc:arguments message)))))
+                          (first arguments)))
+         (is-command (commandp message session)))
+    (when is-command
+      ;; need to parse out commands!
+      (let* ((response (format nil "You said: ~a" (second arguments)))
+             (response (if is-privmsg
+                           response
+                           (format nil "~a: ~a" (cl-irc:source message) response))))
+        (cl-irc:privmsg connection destination response)))
+    t))
 
 (defun gather-handler-types ()
   "generic-function-methods gets the method metaobjects for the generic function. then method-specializers returns the two class specializers for the method; the second one is the class metaobject for the message, so calling class-name on it gets the symbol we need"
