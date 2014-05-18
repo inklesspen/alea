@@ -6,7 +6,9 @@
   :author "inklesspen"
   :license "GPL"
   :depends-on (#:cl-irc
-               #:alexandria)
+               #:alexandria
+               #:esrap)
   :components ((:file "package")
+               (:file "parsing")
                (:file "alea")))
 
