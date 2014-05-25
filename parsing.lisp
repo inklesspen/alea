@@ -19,22 +19,24 @@
 ;;; TODO: support syntax like 1d8+2d6-1d4
 (esrap:defrule standard-roll (and diespec (esrap:? standard-mod)))
 
-(esrap:defrule ore-mod (and (or "+" whitespace) (or (and (esrap:~ "e") integer) (esrap:~ "m"))))
+(esrap:defrule ore-mod (and (or "+" whitespace) (or (and (esrap:~ "e") integer) (esrap:~ "m")))
+  (:function second))
 
 (esrap:defrule ore-diesize (and (esrap:~ "d") (esrap:? "10"))
   (:constant nil))
 
-(esrap:defrule ore-roll (and integer ore-diesize (esrap:? ore-mod))
+(esrap:defrule ore-roll (and integer ore-diesize (esrap:* ore-mod))
   (:function (lambda (parsed)
                (let*
                    ((dice-count (first parsed))
-                    (raw-mod (let ((x (third parsed))) (when (listp x) (second x))))
-                    (expert-die (when (and (listp raw-mod) (equal "e" (first raw-mod)))
-                                  (second raw-mod)))
-                    (master-die? (equal "m" raw-mod)))
+                    (raw-mods (let ((x (third parsed))) (if (listp x) x (list))))
+                    (expert-dice (mapcan #'(lambda (e)
+                                             (when (and (listp e) (equal "e" (first e)))
+                                               (list (second e)))) raw-mods))
+                    (master-die? (some #'(lambda (x) (equal "m" x)) raw-mods)))
                  (make-instance 'ore-roll
                                 :dice-count dice-count
-                                :expert-die expert-die
+                                :expert-dice expert-dice
                                 :master-die? master-die?)))))
 
 (esrap:defrule ore-roll-with-roll (and "roll" whitespace ore-roll)
