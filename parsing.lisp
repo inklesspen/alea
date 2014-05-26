@@ -52,9 +52,8 @@
   (multiple-value-bind (raw-parse next-char success?)
       (handler-case (esrap:parse rule text :junk-allowed t)
         (esrap:esrap-error () nil))
-    (declare (ignore success?))
-    (let ((comment (when next-char (string-trim
-                                    '(#\space #\tab #\newline)
-                                    (subseq text next-char)))))
-      (make-parsed :command raw-parse :comment comment))))
-
+    (when success?
+      (let ((comment (when next-char (string-trim
+                                      '(#\space #\tab #\newline)
+                                      (subseq text next-char)))))
+        (make-parsed :command raw-parse :comment comment)))))
