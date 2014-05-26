@@ -9,6 +9,8 @@
                #:alexandria
                #:esrap)
   :components ((:file "package")
+               (:file "context")
+               (:file "rolls")
                (:file "parsing")
                (:file "alea")))
 
