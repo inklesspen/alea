@@ -22,7 +22,8 @@
 (esrap:defrule ore-mod (and (or "+" whitespace) (or (and (esrap:~ "e") integer) (esrap:~ "m")))
   (:function second))
 
-(esrap:defrule ore-diesize (and (esrap:~ "d") (esrap:? "10"))
+(esrap:defrule ore-diesize (and (esrap:~ "d") (or "10"
+                                                  (esrap:! (alphanumericp character))))
   (:constant nil))
 
 (esrap:defrule ore-roll (and integer ore-diesize (esrap:* ore-mod))
