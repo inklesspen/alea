@@ -16,8 +16,17 @@
 
 (esrap:defrule standard-mod (and (or "+" "-") integer))
 
-;;; TODO: support syntax like 1d8+2d6-1d4
-(esrap:defrule standard-roll (and diespec (esrap:? standard-mod)))
+;;; TODO: support syntax like 1d8+2d6-1d4+10 or even 1d20+5+3d6
+(esrap:defrule standard-roll (and diespec (esrap:? standard-mod))
+  (:function (lambda (parsed)
+               (let* ((dice-construct (first parsed))
+                      (dice-count (first dice-construct))
+                      (die-size (second (second dice-construct)))
+                      (mod-construct (second parsed))
+                      (mul (if mod-construct (if (equal (first mod-construct) "+") 1 -1) 0))
+                      (raw-mod (if mod-construct (second mod-construct) 0))
+                      (modifier (when mod-construct (* mul raw-mod))))
+               `(:standard-roll (,dice-count . ,die-size) ,modifier)))))
 
 (esrap:defrule ore-mod (and (or "+" whitespace) (or (and (esrap:~ "e") integer) (esrap:~ "m")))
   (:function second))
@@ -35,18 +44,13 @@
                                              (when (and (listp e) (equal "e" (first e)))
                                                (list (second e)))) raw-mods))
                     (master-die? (some #'(lambda (x) (equal "m" x)) raw-mods)))
-                 (make-instance 'ore-roll
-                                :dice-count dice-count
-                                :expert-dice expert-dice
-                                :master-die? master-die?)))))
+                 `(:ore-roll ,dice-count ,expert-dice ,master-die?)))))
 
 (esrap:defrule ore-roll-with-roll (and "roll" whitespace ore-roll)
   (:function third))
 
 (esrap:defrule standard-roll-with-roll (and "roll" whitespace standard-roll)
   (:function third))
-
-(defstruct parsed command comment)
 
 (defun handle-parse (rule text)
   (multiple-value-bind (raw-parse next-char success?)
@@ -56,4 +60,6 @@
       (let ((comment (when next-char (string-trim
                                       '(#\space #\tab #\newline)
                                       (subseq text next-char)))))
-        (make-parsed :command raw-parse :comment comment)))))
+        (if comment
+            `(:roll-with-comment ,raw-parse ,comment)
+            raw-parse)))))

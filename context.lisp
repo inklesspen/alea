@@ -21,17 +21,36 @@
 
 (defclass context () ())
 
-(defgeneric handle-command (context text))
-(defmethod handle-command ((context context) text)
-  (format nil "I don't know how to handle: ~a" text))
+(defgeneric parse-command (context text))
+(defgeneric eval-command (context command))
+
+(defmethod parse-command ((context context) text)
+  (or (handle-parse 'standard-roll-with-roll text)
+      (list :parse-error text)))
 
 (defclass ore-context (context) ())
-(defmethod handle-command ((context ore-context) text)
+
+(defmethod parse-command ((context ore-context) text)
   ;;; try ore-roll-with-roll, then standard-roll-with-roll, then ore-roll.
   ;;; if none work, CALL-NEXT-METHOD
   (let ((parsed (or (handle-parse 'ore-roll-with-roll text)
                     (handle-parse 'standard-roll-with-roll text)
                     (handle-parse 'ore-roll text))))
-    (if parsed
-        (format nil "~a~@[ (~a)~]" (response (parsed-command parsed)) (parsed-comment parsed))
-        (call-next-method))))
+    (or parsed (call-next-method))))
+
+(defmethod eval-command ((context ore-context) (command cons))
+  (let ((op (car command)) (args (cdr command)))
+    (case op
+      ((:ore-roll)
+       (let* ((dice-count (first args))
+              (expert-dice (second args))
+              (master-die? (third args))
+              (roll (perform-ore-roll dice-count expert-dice master-die?)))
+         (format nil "~{~a~^ ~}" (getf roll :result))))
+      ((:standard-roll)
+       (format nil "~a" command))
+      ((:roll-with-comment)
+       (format nil "~a (comment: ~a)" (eval-command context (first args)) (second args)))
+      (otherwise (call-next-method)))))
+
+  
