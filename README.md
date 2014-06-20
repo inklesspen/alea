@@ -6,7 +6,7 @@ Alea is a dicebot I'm writing in Common Lisp, because I needed a dicebot and I w
 ### Known Deficiencies
 
 * Alea uses SBCL extensions and doesn't even pretend to be portable to other CL implementations.
-* Alea currently doesn't actually roll dice, or do anything except sit in a channel.
+* Alea cannot be told to join any channels or quit (via in-irc commands)
 
 ### Copyright and License
 
