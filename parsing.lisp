@@ -12,21 +12,30 @@
 
 (esrap:defrule diesize (and (esrap:~ "d") integer))
 
-(esrap:defrule diespec (and integer diesize))
-
-(esrap:defrule standard-mod (and (or "+" "-") integer))
-
-;;; TODO: support syntax like 1d8+2d6-1d4+10 or even 1d20+5+3d6
-(esrap:defrule standard-roll (and diespec (esrap:? standard-mod))
+(esrap:defrule diespec (and integer diesize)
   (:function (lambda (parsed)
-               (let* ((dice-construct (first parsed))
-                      (dice-count (first dice-construct))
-                      (die-size (second (second dice-construct)))
-                      (mod-construct (second parsed))
-                      (mul (if mod-construct (if (equal (first mod-construct) "+") 1 -1) 0))
-                      (raw-mod (if mod-construct (second mod-construct) 0))
-                      (modifier (when mod-construct (* mul raw-mod))))
-               `(:standard-roll (,dice-count . ,die-size) ,modifier)))))
+               (let ((dice-count (first parsed))
+                     (die-size (second (second parsed))))
+                 (list :roll (cons dice-count die-size))))))
+
+(esrap:defrule standard-mod integer
+  (:function (lambda (parsed)
+               (list :mod parsed))))
+
+(esrap:defrule standard-roll-part (or diespec standard-mod))
+
+(esrap:defrule leading-roll-part standard-roll-part
+  (:function (lambda (parsed)
+               (list :plus parsed))))
+
+(esrap:defrule following-roll-part (and (or "+" "-") standard-roll-part)
+  (:function (lambda (parsed)
+               (let ((keyword (if (equal (first parsed) "+") :plus :minus)))
+                 (list keyword (second parsed))))))
+
+(esrap:defrule standard-roll (and leading-roll-part (* following-roll-part))
+  (:function (lambda (parsed)
+               (cons :standard-roll (cons (first parsed) (second parsed))))))
 
 (esrap:defrule ore-mod (and (or "+" whitespace) (or (and (esrap:~ "e") integer) (esrap:~ "m")))
   (:function second))

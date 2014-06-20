@@ -23,3 +23,10 @@
            (result (mapcar #'(lambda (l) (format nil "~dx~d" (length l) (first l))) grouped))
            (result (if master-die? (nreverse (cons "MASTER" (nreverse result))) result)))
       (list :result result :explanation augmented))))
+
+(defun perform-die-roll (dice-count die-size)
+  (let ((raw-rolls (list)))
+    (dotimes (i dice-count)
+      (push (randint die-size) raw-rolls))
+    (setf raw-rolls (nreverse raw-rolls))
+    (list :result (reduce #'+ raw-rolls) :explanation (format nil "~{~a~^+~}" raw-rolls))))
