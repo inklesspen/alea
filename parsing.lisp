@@ -24,7 +24,7 @@
 
 (esrap:defrule standard-roll-part (or diespec standard-mod))
 
-(esrap:defrule leading-roll-part standard-roll-part
+(esrap:defrule leading-roll-part diespec
   (:function (lambda (parsed)
                (list :plus parsed))))
 
