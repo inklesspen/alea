@@ -7,6 +7,11 @@
 (esrap:defrule whitespace (+ (or #\space #\tab #\newline))
   (:constant nil))
 
+(esrap:defrule alphanumeric (alphanumericp character))
+
+(esrap:defrule word (+ alphanumeric)
+  (:function esrap:text))
+
 (esrap:defrule integer (+ (digit-char-p character))
   (:function (lambda (parsed) (parse-integer (esrap:text parsed)))))
 
@@ -40,8 +45,9 @@
 (esrap:defrule ore-mod (and (or "+" whitespace) (or (and (esrap:~ "e") integer) (esrap:~ "m")))
   (:function second))
 
-(esrap:defrule ore-diesize (and (esrap:~ "d") (or "10"
-                                                  (esrap:! (alphanumericp character))))
+(esrap:defrule ore-diesize (and (esrap:~ "d")
+                                (or "10"
+                                    (esrap:! alphanumeric)))
   (:constant nil))
 
 (esrap:defrule ore-roll (and integer ore-diesize (esrap:* ore-mod))
@@ -75,6 +81,61 @@
 
 (esrap:defrule fate-roll-with-roll (and "roll" whitespace fate-roll)
   (:function third))
+
+;;;;; Currency
+
+;; We need a not-followed-by to keep the second word in the name from being 'to'
+;; since that would interfere with the pay-to rule
+(esrap:defrule currency-name (and word (esrap:? (and #\space (esrap:! "to") word)))
+  (:function esrap:text))
+
+(esrap:defrule currency (and integer (esrap:? whitespace) currency-name)
+  (:function (lambda (parsed)
+               (list :currency (first parsed) (third parsed)))))
+
+(esrap:defrule pay-basic (and "pay" whitespace currency)
+  (:function (lambda (parsed)
+               (list :pay-currency (third parsed) :bank))))
+
+(esrap:defrule pay-name (and "pay" whitespace word whitespace currency)
+  (:function (lambda (parsed)
+               (list :pay-currency (fifth parsed) (third parsed)))))
+
+(esrap:defrule pay-to (and "pay" whitespace currency whitespace "to" whitespace word)
+  (:function (lambda (parsed)
+               (list :pay-currency (third parsed) (seventh parsed)))))
+
+(esrap:defrule pay-currency (or pay-to pay-name pay-basic))
+
+(esrap:defrule grant-name (and "grant" whitespace word whitespace currency)
+  (:function (lambda (parsed)
+               (list :grant-currency (fifth parsed) (third parsed)))))
+
+(esrap:defrule grant-to (and "grant" whitespace currency whitespace "to" whitespace word)
+  (:function (lambda (parsed)
+               (list :grant-currency (third parsed) (seventh parsed)))))
+
+(esrap:defrule grant-currency (or grant-to grant-name))
+
+(esrap:defrule give-name (and "give" whitespace word whitespace currency)
+  (:function (lambda (parsed)
+               (list :give-currency (fifth parsed) (third parsed)))))
+
+(esrap:defrule give-to (and "give" whitespace currency whitespace "to" whitespace word)
+  (:function (lambda (parsed)
+               (list :give-currency (third parsed) (seventh parsed)))))
+
+(esrap:defrule give-currency (or give-to give-name))
+
+;; balance
+;; balance all
+;; balance landon
+
+(esrap:defrule balance (and "balance" (esrap:? (and whitespace word)))
+  (:function (lambda (parsed)
+               (let* ((target (or (cadadr parsed) :me))
+                      (target (if (string-equal "all" target) :all target)))
+                 (list :balance target)))))
 
 (defun handle-parse (rule text)
   (multiple-value-bind (raw-parse next-char success?)
