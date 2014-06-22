@@ -175,28 +175,28 @@
                           (cl-irc:source message)
                           (first arguments)))
          (command (identify-command message session)))
-    (when command
+    (if command
       (let ((response (make-instance 'response
                                      :session session
                                      :in-response-to message
                                      :destination destination
                                      :addressee (unless is-privmsg (cl-irc:source message))))
             (context (pick-context session destination is-privmsg)))
-        (format t "~a~%" command)
         ; gotta strip out the command sigil (name or !)
         (let ((parsed (parse-command context (getf command :command))))
           ;; if parse-error, check if strict
           (if (eql (car parsed) :parse-error)
               (if (getf command :strict) (setf (text response) "error yo"))
               (let ((result (eval-command context parsed)))
-                (format t "~a~%" result)
                 (setf (text response) result)))
-          (format t "~a~%" parsed)
           (if (text response)
               (send-response response)
               ;; if we don't want to handle it, return t
               ;; that way cl-irc doesn't whine
-              t))))))
+              t)))
+      ;; we're doing nothing, just return t
+      t)))
+
 
 (defun gather-handler-types ()
   "generic-function-methods gets the method metaobjects for the generic function. then method-specializers returns the two class specializers for the method; the second one is the class metaobject for the message, so calling class-name on it gets the symbol we need"
