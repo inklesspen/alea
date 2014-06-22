@@ -146,5 +146,8 @@
                                       '(#\space #\tab #\newline)
                                       (subseq text next-char)))))
         (if comment
-            `(:roll-with-comment ,raw-parse ,comment)
+            (if (search "ROLL" (string (first raw-parse)))
+                `(:roll-with-comment ,raw-parse ,comment)
+                ;; Return nil if the command isn't a ROLL
+                nil)
             raw-parse)))))
