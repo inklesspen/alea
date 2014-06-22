@@ -30,3 +30,15 @@
       (push (randint die-size) raw-rolls))
     (setf raw-rolls (nreverse raw-rolls))
     (list :result (reduce #'+ raw-rolls) :explanation (format nil "~{~a~^+~}" raw-rolls))))
+
+
+(defun perform-fate-roll (dice-count mod)
+  (let ((raw-rolls (list)))
+    (dotimes (i dice-count)
+      (push (- (randint 3) 2) raw-rolls))
+    (setf raw-rolls (sort raw-rolls #'<))
+    (let* ((explanation (format nil "[~{~a~^ ~}]" raw-rolls))
+           (explanation (if (eql 0 mod)
+                            explanation
+                            (format nil "~a ~@d" explanation mod))))
+      (list :result (reduce #'+ (cons mod raw-rolls)) :explanation explanation))))

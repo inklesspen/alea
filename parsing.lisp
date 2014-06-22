@@ -61,6 +61,21 @@
 (esrap:defrule standard-roll-with-roll (and "roll" whitespace standard-roll)
   (:function third))
 
+(esrap:defrule fate-base-roll (and "4" (esrap:~ "d") (esrap:~ "f"))
+  (:constant 4))
+
+(esrap:defrule fate-mod (and (or "+" "-") integer)
+  (:function (lambda (parsed)
+               (let ((keyword (if (equal (first parsed) "+") :plus :minus)))
+                 (list keyword (second parsed))))))
+
+(esrap:defrule fate-roll (and fate-base-roll (esrap:? fate-mod))
+  (:function (lambda (parsed)
+               (cons :fate-roll (cons (first parsed) (second parsed))))))
+
+(esrap:defrule fate-roll-with-roll (and "roll" whitespace fate-roll)
+  (:function third))
+
 (defun handle-parse (rule text)
   (multiple-value-bind (raw-parse next-char success?)
       (handler-case (esrap:parse rule text :junk-allowed t)

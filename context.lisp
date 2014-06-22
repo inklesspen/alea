@@ -87,3 +87,26 @@
       (otherwise (call-next-method)))))
 
   
+(defclass fate-context (context) ())
+
+(defmethod parse-command ((context fate-context) text)
+  ;;; fate-roll-with-roll
+  ;;; currency
+  ;;; standard-roll-with-roll
+  ;;; fate-roll
+  ;;; if none work, CALL-NEXT-METHOD
+  (let ((parsed (or (handle-parse 'fate-roll-with-roll text)
+                    (handle-parse 'standard-roll-with-roll text)
+                    (handle-parse 'fate-roll text))))
+    (or parsed (call-next-method))))
+
+(defmethod eval-command ((context fate-context) (command cons))
+  (let ((op (car command)) (args (cdr command)))
+    (case op
+      ((:fate-roll)
+       (let* ((dice-count (first args))
+              (mod-sign (case (second args) ((:plus) 1) ((:minus) -1) (otherwise 0)))
+              (mod (* mod-sign (or (third args) 0)))
+              (roll (perform-fate-roll dice-count mod)))
+         (format nil "~a (~a)" (getf roll :result) (getf roll :explanation))))
+      (otherwise (call-next-method)))))
