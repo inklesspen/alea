@@ -139,6 +139,16 @@
     :initform nil
     :accessor drawn)))
 
+;; TODO: have an :after to pre-shuffle the deck
+;; (defmethod initialize-instance :after ((session session) &key)
+;;  (setf (slot-value session 'handler) (curry #'handle-clirc-message session)))
+(defun shuffle-tarot-deck ()
+  (coerce (shuffle (copy-seq *tarot-cards*)) 'list))
+
+(defmethod initialize-instance :after ((context tarot-context) &key)
+  (setf (deck context) (shuffle-tarot-deck))
+  (setf (drawn context) nil))
+
 (defmethod parse-command ((context tarot-context) text)
   ;;; shuffle
   ;;; draw
@@ -151,7 +161,7 @@
 
 (defmethod eval-command ((context tarot-context) place (op (eql :shuffle-deck)) args)
   (declare (ignore args))
-  (setf (deck context) (coerce (shuffle (copy-seq *tarot-cards*)) 'list))
+  (setf (deck context) (shuffle-tarot-deck))
   (setf (drawn context) nil)
   "Shuffled!")
 
