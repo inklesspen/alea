@@ -217,7 +217,7 @@
             (if (eql (car parsed) :parse-error)
                 (if (getf command :strict) (setf (text response) "error yo"))
                 ;;; eval command on context and place.
-                (let ((result (eval-command context parsed)))
+                (let ((result (eval-command context place (car parsed) (cdr parsed))))
                   (setf (text response) result)))
             ;;; return the response if any
             (if (text response)

@@ -137,6 +137,12 @@
                       (target (if (string-equal "all" target) :all target)))
                  (list :balance target)))))
 
+;;;;; Context
+
+(esrap:defrule switch-context (and "context" whitespace (+ alphanumeric))
+  (:function (lambda (parsed)
+               (list :switch-context (esrap:text (third parsed))))))
+
 (defun handle-parse (rule text)
   (multiple-value-bind (raw-parse next-char success?)
       (handler-case (esrap:parse rule text :junk-allowed t)
