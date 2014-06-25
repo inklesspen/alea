@@ -28,16 +28,6 @@
   (or (handle-parse 'standard-roll-with-roll text)
       (list :parse-error text)))
 
-(defclass ore-context (context) ())
-
-(defmethod parse-command ((context ore-context) text)
-  ;;; try ore-roll-with-roll, then standard-roll-with-roll, then ore-roll.
-  ;;; if none work, CALL-NEXT-METHOD
-  (let ((parsed (or (handle-parse 'ore-roll-with-roll text)
-                    (handle-parse 'standard-roll-with-roll text)
-                    (handle-parse 'ore-roll text))))
-    (or parsed (call-next-method))))
-
 (defmethod eval-command ((context context) (command cons))
   (let ((op (car command)) (args (cdr command))
         (wrap (lambda (explanation)
@@ -76,6 +66,16 @@
       (otherwise (call-next-method)))))
 
 (defclass generic-context (context) ())
+
+(defclass ore-context (context) ())
+
+(defmethod parse-command ((context ore-context) text)
+  ;;; try ore-roll-with-roll, then standard-roll-with-roll, then ore-roll.
+  ;;; if none work, CALL-NEXT-METHOD
+  (let ((parsed (or (handle-parse 'ore-roll-with-roll text)
+                    (handle-parse 'standard-roll-with-roll text)
+                    (handle-parse 'ore-roll text))))
+    (or parsed (call-next-method))))
 
 (defmethod eval-command ((context ore-context) (command cons))
   (let ((op (car command)) (args (cdr command)))
