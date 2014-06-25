@@ -5,6 +5,12 @@
 (defun randint (n)
   (+ 1 (random n)))
 
+(defun shuffle (seq)
+  ;; Knuth shuffle (in place)
+  (let ((n (length seq)))
+    (dotimes (i n seq)
+      (rotatef (elt seq i) (elt seq (+ i (random (- n i))))))))
+
 (defun group (list)
   (flet ((take-same (item)
            (loop while (and list (eql (first list) item))

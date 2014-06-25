@@ -131,8 +131,47 @@
          (roll (perform-fate-roll dice-count mod)))
     (format nil "~a (~a)" (getf roll :result) (getf roll :explanation))))
 
+(defclass tarot-context (context)
+  ((deck
+    :initform nil
+    :accessor deck)
+   (drawn
+    :initform nil
+    :accessor drawn)))
+
+(defmethod parse-command ((context tarot-context) text)
+  ;;; shuffle
+  ;;; draw
+  ;;; show-drawn
+  ;;; chargen
+  ;;; next-card
+  (let ((parsed (or (handle-parse 'shuffle-deck text)
+                    (handle-parse 'draw-card text))))
+    (or parsed (call-next-method))))
+
+(defmethod eval-command ((context tarot-context) place (op (eql :shuffle-deck)) args)
+  (declare (ignore args))
+  (setf (deck context) (coerce (shuffle (copy-seq *tarot-cards*)) 'list))
+  (setf (drawn context) nil)
+  "Shuffled!")
+
+(defmethod eval-command ((context tarot-context) place (op (eql :draw-card)) args)
+  (declare (ignore args))
+  (alexandria:if-let (card (pop (deck context)))
+    (progn
+      (push card (drawn context))
+      (format nil "Your card is: ~a" card))
+    "The deck is empty"))    
+
 (defparameter *contexts*
   (let* ((extractor (compose #'string-downcase #'first (curry #'split-sequence:split-sequence #\-) #'symbol-name #'class-name))
          (subclasses (sb-mop:class-direct-subclasses (find-class 'context)))
          (context-names (mapcar extractor subclasses)))
     (pairlis context-names subclasses)))
+
+;;; TODO: tarot card context
+;;; commands for shuffling a deck and drawing from a deck
+;;; need to find a concise dataset for card meanings
+;;; command for doing the tree of life chargen with 'next card' commands
+
+;;; standard playing cards for savage worlds, hillfolk, etc

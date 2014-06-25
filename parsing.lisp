@@ -143,6 +143,16 @@
   (:function (lambda (parsed)
                (list :switch-context (esrap:text (third parsed))))))
 
+(esrap:defrule shuffle-deck (and "shuffle" (esrap:? (and whitespace "deck")))
+  (:function (lambda (parsed)
+               (declare (ignore parsed))
+               (list :shuffle-deck))))
+
+(esrap:defrule draw-card (and "draw" (esrap:? (and whitespace "card")))
+  (:function (lambda (parsed)
+               (declare (ignore parsed))
+               (list :draw-card))))
+
 (defun handle-parse (rule text)
   (multiple-value-bind (raw-parse next-char success?)
       (handler-case (esrap:parse rule text :junk-allowed t)
