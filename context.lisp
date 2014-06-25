@@ -75,6 +75,8 @@
        (format nil "~a (comment: ~a)" (eval-command context (first args)) (second args)))
       (otherwise (call-next-method)))))
 
+(defclass generic-context (context) ())
+
 (defmethod eval-command ((context ore-context) (command cons))
   (let ((op (car command)) (args (cdr command)))
     (case op

@@ -42,14 +42,22 @@
       ;; then send it
       (cl-irc:privmsg connection destination full-text))))
 
-(defclass channel ()
-  ((channel
-    :initarg :channel
-    :initform (error "Must supply channel")
-    :reader channel)
+(defclass place ()
+  ((name
+    :initarg :name
+    :initform (error "Must supply name")
+    :reader name)
+   (is-public
+    :initarg :is-public
+    :initform t
+    :reader is-public)
+   (members
+    :initarg :members
+    :initform nil
+    :accessor members)
    (context
     :initarg :context
-    :initform nil
+    :initform (error "Must supply context")
     :accessor context)))
 
 (defclass session ()
@@ -69,10 +77,20 @@
     :initarg :port
     :initform 6667
     :reader port)
-   (channels
+   (init-channels
     :initarg :channels
-    :initform ()
+    :initform nil
+    :reader init-channels)
+   (default-context
+    :initarg :default-context
+    :initform 'generic-context
+    :reader default-context)
+   (channels
+    :initform nil
     :accessor channels)
+   (privmsgs
+    :initform nil
+    :accessor privmsgs)
    (connection
     :initarg :connection
     :initform nil
@@ -107,34 +125,30 @@
 
 ;; TODO some nickserv integration. it seems to work mainly with NOTICE from NickServ.
 
+(defmethod handle-clirc-message ((session session) (message cl-irc:irc-join-message))
+  (let ((nickname (cl-irc:source message))
+        (channel (first (cl-irc:arguments message))))
+    (format t "~a joined channel ~a~%" nickname channel)
+    (when (string-equal (bot-nickname session) nickname)
+      ;; bot just joined this channel
+      (let* ((new-context (make-instance (default-context session)))
+             ;; members will be filled in when it gets its first command
+             (new-place (make-instance 'place :context new-context :is-public t :name channel)))
+        (push (cons channel new-place) (channels session)))))
+  ;; return nil so the default hook fires also
+  nil)
 
 (defmethod handle-clirc-message ((session session) (message cl-irc:irc-rpl_welcome-message))
   (format t "~A~%" (describe (connection session)))
   (format t "~A~%" (describe message))
-  (dolist (channel (channels session))
-    (cl-irc:join (connection session) (channel channel))))
+  (dolist (channel (init-channels session))
+    (cl-irc:join (connection session) channel)))
 
 (defun bot-nickname (session)
   (cl-irc:nickname (cl-irc:user (connection session))))
 
 (defun message-recipient (message)
   (first (cl-irc:arguments message)))
-
-(defun strict-commandp (message session)
-  "A command is 'strict' if it begins with the bot's name or is in a private message."
-  (let* ((bot-nickname (bot-nickname session))
-         (recipient (message-recipient message))
-         (potential-command (second (cl-irc:arguments message))))
-    (or (alexandria:starts-with-subseq bot-nickname potential-command :test #'string-equal)
-        (string-equal bot-nickname recipient))))
-
-; replace this with (identify-command) which returns only the command, along with flags
-
-(defun commandp (message session)
-  (let* ((sigil (sigil session))
-         (potential-command (second (cl-irc:arguments message)))
-         (first-char (char potential-command 0)))
-    (or (eql sigil first-char) (strict-commandp message session))))
 
 (defun remove-first-word (string)
   (let* ((first-space (position #\space string))
@@ -159,43 +173,60 @@
          (list :strict nil :command (subseq potential-command first-nonsigil))))
       (t nil))))
 
-(defun pick-context (session destination is-privmsg)
-  (let ((standard-context (make-instance 'context)))
-    (if is-privmsg standard-context
-        (alexandria:if-let (matching-channels (remove-if-not #'(lambda (chanobj) (string-equal (channel chanobj) destination)) (channels session)))
-          (context (first matching-channels))
-          standard-context))))
+(defun identify-users (session channel)
+  ;;; TODO: should exclude bot's nickname
+  (alexandria:hash-table-keys (cl-irc:users (cl-irc:find-channel (connection session) channel))))
 
-(defmethod handle-clirc-message ((session session) (message cl-irc:irc-privmsg-message))
-  (let* ((connection (connection session))
-         (nickname (cl-irc:nickname (cl-irc:user connection)))
+(defun identify-relevant-place (message session)
+  (let* ((bot-nickname (bot-nickname session))
          (arguments (cl-irc:arguments message))
-         (is-privmsg (string-equal (first arguments) nickname))
+         (is-privmsg (string-equal (first arguments) bot-nickname))
          (destination (if is-privmsg
                           (cl-irc:source message)
-                          (first arguments)))
-         (command (identify-command message session)))
-    (if command
-      (let ((response (make-instance 'response
-                                     :session session
-                                     :in-response-to message
-                                     :destination destination
-                                     :addressee (unless is-privmsg (cl-irc:source message))))
-            (context (pick-context session destination is-privmsg)))
-        ; gotta strip out the command sigil (name or !)
-        (let ((parsed (parse-command context (getf command :command))))
-          ;; if parse-error, check if strict
-          (if (eql (car parsed) :parse-error)
-              (if (getf command :strict) (setf (text response) "error yo"))
-              (let ((result (eval-command context parsed)))
-                (setf (text response) result)))
-          (if (text response)
+                          (first arguments))))
+    (when is-privmsg
+      (let ((cell (assoc destination (privmsgs session) :test #'string-equal)))
+        (unless cell
+          ;;; make a privmsg place
+          (let* ((new-context (make-instance (default-context session)))
+                 (new-place (make-instance 'place :context new-context :is-public nil :name destination :members (list destination)))
+                 (new-cons (cons destination new-place)))
+            (push new-cons (privmsgs session))))))
+    (cdr (assoc destination (slot-value session (if is-privmsg 'privmsgs 'channels)) :test #'string-equal))))
+
+
+(defmethod handle-clirc-message ((session session) (message cl-irc:irc-privmsg-message))
+  (let
+      ;;; identify the relevant place (creating a privmsg place if needed)
+      ((place (identify-relevant-place message session)))
+    ;;; update the place's members if it's a public place
+    (when (is-public place)
+      (let ((members (identify-users session (name place))))
+        (setf (members place) members)))
+    ;;; identify a command if any
+    (let ((command (identify-command message session))
+          (context (context place)))
+      (if command
+          ;;; parse command. if parse-error and strict command, error message
+          (let ((response (make-instance 'response
+                                         :session session
+                                         :in-response-to message
+                                         :destination (name place)
+                                         :addressee (when (is-public place) (cl-irc:source message))))
+                (parsed (parse-command context (getf command :command))))
+            (if (eql (car parsed) :parse-error)
+                (if (getf command :strict) (setf (text response) "error yo"))
+                ;;; eval command on context and place.
+                (let ((result (eval-command context parsed)))
+                  (setf (text response) result)))
+            ;;; return the response if any
+            (if (text response)
               (send-response response)
               ;; if we don't want to handle it, return t
               ;; that way cl-irc doesn't whine
-              t)))
-      ;; we're doing nothing, just return t
-      t)))
+              t))
+          ;; we're doing nothing, just return t
+          t))))
 
 
 (defun gather-handler-types ()
@@ -225,8 +256,7 @@
 (defvar *sessions* (make-hash-table :test 'equal))
 
 (defun connect (name host port nick channel)
-  (let* ((channel (make-instance 'channel :channel channel :context (make-instance 'ore-context)))
-         (session (make-instance 'session :session-name name :nickname nick :host host :port port :channels (list channel)))
+  (let* ((session (make-instance 'session :session-name name :nickname nick :host host :port port :channels (list channel)))
          (stdout *standard-output*)
          (threadname (format nil "irc-handler-~S" name)))
     (setf (gethash name *sessions*) session)
