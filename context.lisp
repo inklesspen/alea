@@ -71,6 +71,8 @@
               (explanation (format nil "~{~a~^~}" explanations))
               (explanation (if (eql #\+ (elt explanation 0)) (subseq explanation 1) explanation)))
          (format nil "~a [~a]" result explanation)))
+      ((:roll-with-comment)
+       (format nil "~a (comment: ~a)" (eval-command context (first args)) (second args)))
       (otherwise (call-next-method)))))
 
 (defmethod eval-command ((context ore-context) (command cons))
@@ -82,8 +84,6 @@
               (master-die? (third args))
               (roll (perform-ore-roll dice-count expert-dice master-die?)))
          (format nil "~{~a~^ ~}" (getf roll :result))))
-      ((:roll-with-comment)
-       (format nil "~a (comment: ~a)" (eval-command context (first args)) (second args)))
       (otherwise (call-next-method)))))
 
   
