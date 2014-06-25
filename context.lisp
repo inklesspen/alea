@@ -19,7 +19,11 @@
 ;;; style reporting for d10s. if that doesn't work (say it says
 ;;; 2d12+5) it will match against a generic 'roll'
 
-(defclass context () ())
+(defclass context () 
+  ((known-currencies
+    :allocation :class
+    :initform nil
+    :reader known-currencies)))
 
 (defgeneric parse-command (context text))
 (defgeneric eval-command (context command))
@@ -88,8 +92,11 @@
          (format nil "~{~a~^ ~}" (getf roll :result))))
       (otherwise (call-next-method)))))
 
-  
-(defclass fate-context (context) ())
+(defclass fate-context (context)
+  ((known-currencies
+    :allocation :class
+    :initform '(("fate point" . :fate-point) ("fp" . :fate-point))
+    :reader known-currencies)))
 
 (defmethod parse-command ((context fate-context) text)
   ;;; fate-roll-with-roll
