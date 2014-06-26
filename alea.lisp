@@ -173,7 +173,8 @@
        (list :strict t :command (remove-first-word potential-command)))
       ((eql sigil first-char)
        (let ((first-nonsigil (position sigil potential-command :test (complement #'eql))))
-         (list :strict nil :command (subseq potential-command first-nonsigil))))
+         (when first-nonsigil
+           (list :strict nil :command (subseq potential-command first-nonsigil)))))
       (t nil))))
 
 (defun identify-users (session channel)
