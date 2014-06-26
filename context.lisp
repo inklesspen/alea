@@ -137,41 +137,62 @@
     :accessor deck)
    (drawn
     :initform nil
-    :accessor drawn)))
+    :accessor drawn)
+   (chargen-in-progress
+    :initform nil
+    :accessor chargen-in-progress)
+   (sephirot
+    :initform nil
+    :accessor sephirot)))
 
 ;; TODO: have an :after to pre-shuffle the deck
 ;; (defmethod initialize-instance :after ((session session) &key)
 ;;  (setf (slot-value session 'handler) (curry #'handle-clirc-message session)))
-(defun shuffle-tarot-deck ()
-  (coerce (shuffle (copy-seq *tarot-cards*)) 'list))
+(defun shuffle-tarot-deck (context)
+  (setf (deck context) (coerce (shuffle (copy-seq *tarot-cards*)) 'list))
+  (setf (drawn context) nil))
 
 (defmethod initialize-instance :after ((context tarot-context) &key)
-  (setf (deck context) (shuffle-tarot-deck))
-  (setf (drawn context) nil))
+  (shuffle-tarot-deck context))
 
 (defmethod parse-command ((context tarot-context) text)
   ;;; shuffle
   ;;; draw
   ;;; show-drawn
   ;;; chargen
-  ;;; next-card
   (let ((parsed (or (handle-parse 'shuffle-deck text)
-                    (handle-parse 'draw-card text))))
+                    (handle-parse 'draw-card text)
+                    (handle-parse 'tarot-chargen text))))
     (or parsed (call-next-method))))
 
 (defmethod eval-command ((context tarot-context) place (op (eql :shuffle-deck)) args)
   (declare (ignore args))
-  (setf (deck context) (shuffle-tarot-deck))
-  (setf (drawn context) nil)
+  (shuffle-tarot-deck context)
+  (setf (chargen-in-progress context) nil)
   "Shuffled!")
 
 (defmethod eval-command ((context tarot-context) place (op (eql :draw-card)) args)
   (declare (ignore args))
-  (alexandria:if-let (card (pop (deck context)))
-    (progn
-      (push card (drawn context))
-      (format nil "Your card is: ~a" card))
-    "The deck is empty"))    
+  (if (chargen-in-progress context)
+      (let ((card (pop (deck context)))
+            (sephirah (pop (sephirot context))))
+        ;; can't run out of cards while doing chargen, but can run out of sephirot
+        (unless (sephirot context)
+          (setf (chargen-in-progress context) nil))
+        (push card (drawn context))
+        (list sephirah (format nil "The card is: ~a" card)))
+      (alexandria:if-let (card (pop (deck context)))
+        (progn
+          (push card (drawn context))
+          (format nil "Your card is: ~a" card))
+        "The deck is empty")))
+
+(defmethod eval-command ((context tarot-context) place (op (eql :tarot-chargen)) args)
+  (declare (ignore args))
+  (setf (chargen-in-progress context) t)
+  (setf (sephirot context) (copy-list *chargen-sephirot*))
+  (shuffle-tarot-deck context)
+  "Chargen is ready.")
 
 (defparameter *contexts*
   (let* ((extractor (compose #'string-downcase #'first (curry #'split-sequence:split-sequence #\-) #'symbol-name #'class-name))
