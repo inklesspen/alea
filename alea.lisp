@@ -35,12 +35,15 @@
                    (addressee addressee)
                    (text text)) response
     (unless text (error "Must set response text first"))
-    (let ((connection (connection session))
-          (full-text (if addressee
-                         (format nil "~a: ~a" addressee text)
-                         text)))
-      ;; then send it
-      (cl-irc:privmsg connection destination full-text))))
+    (let ((responses (if (stringp text) (list text) text)))
+      (dolist (text responses) t
+        (let ((connection (connection session))
+              (full-text (if addressee
+                             (format nil "~a: ~a" addressee text)
+                             text)))
+          ;; then send it
+          (cl-irc:privmsg connection destination full-text)))
+      t)))
 
 (defclass place ()
   ((name
