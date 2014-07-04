@@ -20,13 +20,23 @@
 ;;; 2d12+5) it will match against a generic 'roll'
 
 (defclass context () 
-  ((known-currencies
+  ((random-state
+    :initform (make-random-state t)
+    :reader local-random-state)
+   (known-currencies
     :allocation :class
     :initform nil
     :reader known-currencies)))
 
 (defgeneric parse-command (context text))
 (defgeneric eval-command (context place op args))
+
+(defmethod eval-command :around ((context context) place op args)
+  ;; since the contents of random-state are mutated directly,
+  ;; we don't have to worry about capturing the state afterward
+  ;; or setting it back into the context
+  (let ((*random-state* (local-random-state context)))
+    (call-next-method)))
 
 (defmethod parse-command ((context context) text)
   (or (handle-parse 'switch-context text)
