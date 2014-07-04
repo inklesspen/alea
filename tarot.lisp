@@ -12,4 +12,4 @@
 ))
 
 (defparameter *chargen-sephirot*
-  (list "Keter: the big concept" "Chokhmah: outward expression and mode of acting" "Binah: how the world acts upon this character" "Chesed: stable or predictably good things" "Geburah: somethingpredictably bad or instability which drives to quests" "Tiphareth: unify the previous cards to sum up inner face and essential nature" "Netzach: emotions and interpersonal relationships" "Hod: intellect and communication" "Yesod: unify the previous two cards to sum up outer face" "Malkuth: wrap up, conclusion, ultimate end"))
+  (list "Keter: the big concept" "Chokhmah: outward expression and mode of acting" "Binah: how the world acts upon this character" "Chesed: stable or predictably good things" "Geburah: something predictably bad or instability which drives to quests" "Tiphareth: unify the previous cards to sum up inner face and essential nature" "Netzach: emotions and interpersonal relationships" "Hod: intellect and communication" "Yesod: unify the previous two cards to sum up outer face" "Malkuth: wrap up, conclusion, ultimate end"))
