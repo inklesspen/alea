@@ -139,9 +139,9 @@
 
 ;;;;; Context
 
-(esrap:defrule switch-context (and "context" whitespace (+ alphanumeric))
+(esrap:defrule switch-context (and "switch" whitespace (esrap:? (and "to" whitespace)) (+ alphanumeric))
   (:function (lambda (parsed)
-               (list :switch-context (esrap:text (third parsed))))))
+               (list :switch-context (esrap:text (fourth parsed))))))
 
 
 ;;;;; tarot
