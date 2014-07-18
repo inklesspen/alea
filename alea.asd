@@ -7,7 +7,8 @@
   :license "GPL"
   :depends-on (#:cl-irc
                #:alexandria
-               #:esrap)
+               #:esrap
+               #:iterate)
   :components ((:file "package")
                (:file "context")
                (:file "rolls")

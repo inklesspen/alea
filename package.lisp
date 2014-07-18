@@ -2,6 +2,6 @@
 
 (in-package "COMMON-LISP-USER")
 (defpackage #:alea
-  (:use #:cl)
+  (:use #:cl #:iterate)
   (:import-from :alexandria :curry :compose))
 

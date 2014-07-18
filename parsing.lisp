@@ -143,6 +143,9 @@
   (:function (lambda (parsed)
                (list :switch-context (esrap:text (fourth parsed))))))
 
+;; TODO: allow asking for help on individual commands
+(esrap:defrule show-help "help"
+  (:constant (list :show-help)))
 
 ;;;;; tarot
 

@@ -31,6 +31,51 @@
 (defgeneric parse-command (context text))
 (defgeneric eval-command (context place op args))
 
+(defgeneric context-help (context))
+(defgeneric command-help (context op))
+
+;; Key is a dotted pair of context symbol and op symbol
+(defparameter *examples* (make-hash-table :test #'equal))
+
+(defmacro command-in-context (context op (&rest examples) &body body)
+  `(progn
+     (setf (gethash (cons (quote ,context) ,op) *examples*) (list ,@examples))
+     (defmethod eval-command ((context ,context) place (op (eql ,op)) args)
+       ,@body)))
+
+(command-in-context context :show-help ("help")
+  (format nil "~a ~{~a~^|~}"
+          (context-help context)
+          (remove nil
+                  (mapcar (curry #'command-help context)
+                          (list-commands-for-context context)))))
+
+(defmethod context-help ((context context))
+  (documentation (class-of context) t))
+
+(defun list-commands-for-context (context)
+  (mapcar
+   ;; get the third specializer's object from the method
+   (compose #'sb-mop:eql-specializer-object #'third #'sb-mop:method-specializers)
+   ;; remove any methods with qualifiers (like :around)
+   (remove-if #'sb-mop:method-qualifiers
+              ;; obtain all eval-command methods for this context class
+              (sb-mop:compute-applicable-methods-using-classes
+               #'eval-command
+               (list (class-of context) t (class-of :op) t)))))
+
+(defmethod command-help ((context context) op)
+  nil)
+  ;; (let* ((all-superclasses (sb-mop:class-precedence-list (class-of context)))
+  ;;        (relevant-superclasses (iter
+  ;;                                 (for klass in all-superclasses)
+  ;;                                 (collect klass into klasses)
+  ;;                                 (finding klasses such-that (eq (find-class 'context) klass))))
+  ;;        (possible-examples (iter
+  ;;                             (for klass in relevant-superclasses)
+  ;;                             (collect (gethash (cons (class-name klass) op) *examples*)))))
+  ;;   possible-examples))
+
 (defmethod eval-command :around ((context context) place op args)
   ;; since the contents of random-state are mutated directly,
   ;; we don't have to worry about capturing the state afterward
@@ -40,6 +85,7 @@
 
 (defmethod parse-command ((context context) text)
   (or (handle-parse 'switch-context text)
+      (handle-parse 'show-help text)
       (list :parse-error text)))
 
 (defmethod eval-command ((context context) place (op (eql :roll)) args)
@@ -69,7 +115,7 @@
          (explanation (getf result-list :explanation)))
     (list :result result :explanation (format nil "-~a" (wrap-explanation explanation)))))
 
-(defmethod eval-command ((context context) place (op (eql :standard-roll)) args)
+(command-in-context context :standard-roll ("roll 1d20" "roll 2d6+3" "roll 1d20-1d4+3")
   (let* ((sub-rolls (mapcar #'(lambda (arg) (eval-command context place (car arg) (cdr arg))) args))
          (results (mapcar #'(lambda (result-list) (getf result-list :result)) sub-rolls))
          (result (reduce #'+ results))
@@ -78,13 +124,13 @@
          (explanation (if (eql #\+ (elt explanation 0)) (subseq explanation 1) explanation)))
     (format nil "~a [~a]" result explanation)))
 
-(defmethod eval-command ((context context) place (op (eql :roll-with-comment)) args)
+(command-in-context context :roll-with-comment ()
   (let* ((actual-command (first args))
          (result (eval-command context place (car actual-command) (cdr actual-command)))
          (comment (second args)))
     (format nil "~a (comment: ~a)" result comment)))
 
-(defmethod eval-command ((context context) place (op (eql :switch-context)) args)
+(command-in-context context :switch-context ("switch to fate" "switch to generic" "switch wulin")
   ;; set the new context into place
   (alexandria:if-let (pair (assoc (first args) *contexts* :test #'string-equal))
     (let ((new-context (make-instance (cdr pair))))
@@ -92,7 +138,8 @@
       (format nil "Switching to ~a" (car pair)))
     (format nil "I don't know about ~a. I only know about: ~a" (first args) (mapcar #'car *contexts*))))
     
-(defclass generic-context (context) ())
+(defclass generic-context (context) ()
+  (:documentation "The generic context works for many RPGs that need to roll polyhedral dice with or without modifiers."))
 
 (defmethod parse-command ((context generic-context) text)
   ;;; try ore-roll-with-roll, then standard-roll-with-roll, then ore-roll.
@@ -100,7 +147,8 @@
   (let ((parsed (or (handle-parse 'standard-roll-with-roll text))))
     (or parsed (call-next-method))))
 
-(defclass ore-context (context) ())
+(defclass ore-context (context) ()
+  (:documentation "The ORE context is intended for One-Roll-Engine games such as Reign or Wild Talents."))
 
 (defmethod parse-command ((context ore-context) text)
   ;;; try ore-roll-with-roll, then standard-roll-with-roll, then ore-roll.
@@ -110,7 +158,7 @@
                     (handle-parse 'ore-roll text))))
     (or parsed (call-next-method))))
 
-(defmethod eval-command ((context context) place (op (eql :ore-roll)) args)
+(command-in-context ore-context :ore-roll ("roll 5d+e2" "roll 6d+m" "roll 9d+e8+e9")
   (let* ((dice-count (first args))
          (expert-dice (second args))
          (master-die? (third args))
@@ -121,7 +169,8 @@
   ((known-currencies
     :allocation :class
     :initform '(("fate point" . :fate-point) ("fp" . :fate-point))
-    :reader known-currencies)))
+    :reader known-currencies))
+  (:documentation "The FATE context is for games which use FUDGE/FATE dice and FATE points."))
 
 (defmethod parse-command ((context fate-context) text)
   ;;; fate-roll-with-roll
@@ -134,7 +183,7 @@
                     (handle-parse 'fate-roll text))))
     (or parsed (call-next-method))))
 
-(defmethod eval-command ((context context) place (op (eql :fate-roll)) args)
+(command-in-context fate-context :fate-roll ("roll 4dF+2" "roll 4dF-3" "roll 4dF")
   (let* ((dice-count (first args))
          (mod-sign (case (second args) ((:plus) 1) ((:minus) -1) (otherwise 0)))
          (mod (* mod-sign (or (third args) 0)))
@@ -153,7 +202,8 @@
     :accessor chargen-in-progress)
    (sephirot
     :initform nil
-    :accessor sephirot)))
+    :accessor sephirot))
+  (:documentation "The tarot context supports shuffling tarot decks and dealing cards, as well as tarot-based character generation."))
 
 ;; TODO: have an :after to pre-shuffle the deck
 ;; (defmethod initialize-instance :after ((session session) &key)
@@ -175,13 +225,13 @@
                     (handle-parse 'tarot-chargen text))))
     (or parsed (call-next-method))))
 
-(defmethod eval-command ((context tarot-context) place (op (eql :shuffle-deck)) args)
+(command-in-context tarot-context :shuffle-deck ("shuffle" "shuffle deck")
   (declare (ignore args))
   (shuffle-tarot-deck context)
   (setf (chargen-in-progress context) nil)
   "Shuffled!")
 
-(defmethod eval-command ((context tarot-context) place (op (eql :draw-card)) args)
+(command-in-context tarot-context :draw-card ("draw" "draw card")
   (declare (ignore args))
   (if (chargen-in-progress context)
       (let ((card (pop (deck context)))
@@ -197,7 +247,7 @@
           (format nil "Your card is: ~a" card))
         "The deck is empty")))
 
-(defmethod eval-command ((context tarot-context) place (op (eql :tarot-chargen)) args)
+(command-in-context tarot-context :tarot-chargen ("chargen")
   (declare (ignore args))
   (setf (chargen-in-progress context) t)
   (setf (sephirot context) (copy-list *chargen-sephirot*))
