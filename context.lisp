@@ -205,15 +205,14 @@
     :accessor sephirot))
   (:documentation "The tarot context supports shuffling tarot decks and dealing cards, as well as tarot-based character generation."))
 
-;; TODO: have an :after to pre-shuffle the deck
-;; (defmethod initialize-instance :after ((session session) &key)
-;;  (setf (slot-value session 'handler) (curry #'handle-clirc-message session)))
 (defun shuffle-tarot-deck (context)
   (setf (deck context) (coerce (shuffle (copy-seq *tarot-cards*)) 'list))
   (setf (drawn context) nil))
 
 (defmethod initialize-instance :after ((context tarot-context) &key)
-  (shuffle-tarot-deck context))
+  ;; We have to wrap it like this because this isn't subject to the :around for eval.
+  (let ((*random-state* (local-random-state context)))
+    (shuffle-tarot-deck context)))
 
 (defmethod parse-command ((context tarot-context) text)
   ;;; shuffle
