@@ -19,6 +19,12 @@
 ;;; style reporting for d10s. if that doesn't work (say it says
 ;;; 2d12+5) it will match against a generic 'roll'
 
+(defstruct currency synonyms symbol singular plural)
+(defun format-currency (count currency)
+  (if (= 1 count)
+      (format nil "~d ~a" count (currency-singular currency))
+      (format nil "~d ~a" count (currency-plural currency))))
+
 (defclass context () 
   ((random-state
     :initform (make-random-state t)
@@ -26,7 +32,25 @@
    (known-currencies
     :allocation :class
     :initform nil
-    :reader known-currencies)))
+    :reader known-currencies)
+   (currency-balances
+    :initform (make-hash-table :test #'equal))))
+
+(defgeneric player-balance (context name currency))
+(defmethod player-balance ((context context) name currency)
+  (with-slots (currency-balances) context
+    (or (gethash (cons name currency) currency-balances) 0)))
+
+(defgeneric (setf player-balance) (value context name currency))
+(defmethod (setf player-balance) (value (context context) name currency)
+  (with-slots (currency-balances) context
+    (setf (gethash (cons name currency) currency-balances) value)))
+
+(defgeneric get-currency (context currency-name))
+(defmethod get-currency (context currency-name)
+  (find currency-name (known-currencies context)
+        :key (lambda (c) (currency-synonyms c))
+        :test (lambda (search synonyms) (find search synonyms :test #'string-equal))))
 
 (defgeneric parse-command (context text))
 (defgeneric eval-command (context place requester op args))
@@ -168,7 +192,7 @@
 (defclass fate-context (context)
   ((known-currencies
     :allocation :class
-    :initform '(("fate point" . :fate-point) ("fp" . :fate-point))
+    :initform (list (make-currency :synonyms '("fate points" "fate point" "fp") :symbol :fate-point :singular "fate point" :plural "fate points"))
     :reader known-currencies))
   (:documentation "The FATE context is for games which use FUDGE/FATE dice and FATE points."))
 
@@ -179,6 +203,7 @@
   ;;; fate-roll
   ;;; if none work, CALL-NEXT-METHOD
   (let ((parsed (or (handle-parse 'fate-roll-with-roll text)
+                    (handle-parse 'currency-command text)
                     (handle-parse 'standard-roll-with-roll text)
                     (handle-parse 'fate-roll text))))
     (or parsed (call-next-method))))
@@ -189,6 +214,45 @@
          (mod (* mod-sign (or (third args) 0)))
          (roll (perform-fate-roll dice-count mod)))
     (format nil "~a (~a)" (getf roll :result) (getf roll :explanation))))
+
+;; This example belongs at the fate level, but the implementation probably belongs at the base context level. What to do, what to do...
+
+;; grant is a synonym for give; they both pay from the infinite bank.
+;; with pay, you cannot pay more than you already have
+(command-in-context context :pay-currency ("pay 5 fate points" "pay sam 5 fp" "pay 5 fp to sam")
+  (let* ((payment (first args))
+         (recipient (second args))
+         (amount (second payment))
+         (currency-name (third payment))
+         (currency (get-currency context currency-name)))
+    (if currency
+        (let ((current-balance (player-balance context requester (currency-symbol currency))))
+          (if (< current-balance amount)
+              (format nil "You cannot pay ~a; you have only ~a." (format-currency amount currency) current-balance)
+              (let ((new-balance (decf (player-balance context requester (currency-symbol currency)) amount)))
+                (if (eql :bank recipient)
+                    (format nil "You now have ~a." (format-currency new-balance currency))
+                    (let ((recipient-new-balance (incf (player-balance context recipient (currency-symbol currency)) amount)))
+                      (format nil "You now have ~a. ~a now has ~a." (format-currency new-balance currency) recipient (format-currency recipient-new-balance currency)))))))
+        (format nil "I don't recognize \"~a\" as a currency." currency-name))))
+
+(command-in-context context :grant-currency ("grant 1 fate point to sam" "grant sam 1 fp")
+  (let* ((payment (first args))
+         (recipient (second args))
+         (amount (second payment))
+         (currency-name (third payment))
+         (currency (get-currency context currency-name)))
+    (if currency
+        (let ((new-balance (incf (player-balance context recipient (currency-symbol currency)) amount)))
+          (format nil "~a now has ~a." recipient (format-currency new-balance currency)))
+        (format nil "I don't recognize \"~a\" as a currency." currency-name))))
+
+(command-in-context context :balance ("balance" "balance all" "balance sam")
+  (let* ((target (first args)))
+    (case target
+      ((:me) "You!")
+      ((:all) "Everyone!")
+      (otherwise (format nil "~a!" target)))))
 
 (defclass tarot-context (context)
   ((deck

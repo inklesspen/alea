@@ -132,10 +132,13 @@
 ;; balance landon
 
 (esrap:defrule balance (and "balance" (esrap:? (and whitespace word)))
+  ;; TODO: allow 'me' to evaluate to :me also
   (:function (lambda (parsed)
                (let* ((target (or (cadadr parsed) :me))
                       (target (if (string-equal "all" target) :all target)))
                  (list :balance target)))))
+
+(esrap:defrule currency-command (or pay-currency grant-currency give-currency balance))
 
 ;;;;; Context
 
