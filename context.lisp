@@ -29,7 +29,7 @@
     :reader known-currencies)))
 
 (defgeneric parse-command (context text))
-(defgeneric eval-command (context place op args))
+(defgeneric eval-command (context place requester op args))
 
 (defgeneric context-help (context))
 (defgeneric command-help (context op))
@@ -40,7 +40,7 @@
 (defmacro command-in-context (context op (&rest examples) &body body)
   `(progn
      (setf (gethash (cons (quote ,context) ,op) *examples*) (list ,@examples))
-     (defmethod eval-command ((context ,context) place (op (eql ,op)) args)
+     (defmethod eval-command ((context ,context) place requester (op (eql ,op)) args)
        ,@body)))
 
 (command-in-context context :show-help ("help")
@@ -62,7 +62,7 @@
               ;; obtain all eval-command methods for this context class
               (sb-mop:compute-applicable-methods-using-classes
                #'eval-command
-               (list (class-of context) t (class-of :op) t)))))
+               (list (class-of context) t t (class-of :op) t)))))
 
 (defmethod command-help ((context context) op)
   nil)
@@ -76,7 +76,7 @@
   ;;                             (collect (gethash (cons (class-name klass) op) *examples*)))))
   ;;   possible-examples))
 
-(defmethod eval-command :around ((context context) place op args)
+(defmethod eval-command :around ((context context) place requester op args)
   ;; since the contents of random-state are mutated directly,
   ;; we don't have to worry about capturing the state afterward
   ;; or setting it back into the context
@@ -88,14 +88,14 @@
       (handle-parse 'show-help text)
       (list :parse-error text)))
 
-(defmethod eval-command ((context context) place (op (eql :roll)) args)
+(defmethod eval-command ((context context) place requester (op (eql :roll)) args)
   (let* ((die-spec (first args))
          (dice-count (car die-spec))
          (die-size (cdr die-spec))
          (roll (perform-die-roll dice-count die-size)))
     roll))
 
-(defmethod eval-command ((context context) place (op (eql :mod)) args)
+(defmethod eval-command ((context context) place requester (op (eql :mod)) args)
   (list :result (first args) :explanation (format nil "~a" (first args))))
 
 (defun wrap-explanation (explanation)
@@ -103,20 +103,20 @@
       (format nil "(~a)" explanation)
       explanation))
 
-(defmethod eval-command ((context context) place (op (eql :plus)) args)
-  (let* ((result-list (eval-command context place (car (first args)) (cdr (first args))))
+(defmethod eval-command ((context context) place requester (op (eql :plus)) args)
+  (let* ((result-list (eval-command context place requester (car (first args)) (cdr (first args))))
          (result (getf result-list :result))
          (explanation (getf result-list :explanation)))
     (list :result result :explanation (format nil "+~a" (wrap-explanation explanation)))))
 
-(defmethod eval-command ((context context) place (op (eql :minus)) args)
-  (let* ((result-list (eval-command context place (car (first args)) (cdr (first args))))
+(defmethod eval-command ((context context) place requester (op (eql :minus)) args)
+  (let* ((result-list (eval-command context place requester (car (first args)) (cdr (first args))))
          (result (* -1 (getf result-list :result)))
          (explanation (getf result-list :explanation)))
     (list :result result :explanation (format nil "-~a" (wrap-explanation explanation)))))
 
 (command-in-context context :standard-roll ("roll 1d20" "roll 2d6+3" "roll 1d20-1d4+3")
-  (let* ((sub-rolls (mapcar #'(lambda (arg) (eval-command context place (car arg) (cdr arg))) args))
+  (let* ((sub-rolls (mapcar #'(lambda (arg) (eval-command context place requester (car arg) (cdr arg))) args))
          (results (mapcar #'(lambda (result-list) (getf result-list :result)) sub-rolls))
          (result (reduce #'+ results))
          (explanations (mapcar #'(lambda (result-list) (getf result-list :explanation)) sub-rolls))
@@ -126,7 +126,7 @@
 
 (command-in-context context :roll-with-comment ()
   (let* ((actual-command (first args))
-         (result (eval-command context place (car actual-command) (cdr actual-command)))
+         (result (eval-command context place requester (car actual-command) (cdr actual-command)))
          (comment (second args)))
     (format nil "~a (comment: ~a)" result comment)))
 
