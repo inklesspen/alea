@@ -42,6 +42,23 @@
   (:function (lambda (parsed)
                (cons :standard-roll (cons (first parsed) (second parsed))))))
 
+(esrap:defrule exploding-d6 (and "!" (esrap:~ "d") "6")
+  (:function (lambda (parsed)
+               (declare (ignore parsed))
+               :exploding-d6)))
+
+(esrap:defrule feng-shui-exploding-d6 (and exploding-d6 "-" exploding-d6)
+  (:function (lambda (parsed)
+               (declare (ignore parsed))
+               ;; this is pretty insane! i think the parse tree needs fixing
+               (list (list :plus (list :exploding-d6)) (list :minus (list :exploding-d6))))))
+
+(esrap:defrule feng-shui (and feng-shui-exploding-d6 (* following-roll-part))
+  (:function (lambda (parsed)
+               (append (list :feng-shui-roll)
+                       (first parsed)
+                       (second parsed)))))
+
 (esrap:defrule ore-mod (and (or "+" whitespace) (or (and (esrap:~ "e") integer) (esrap:~ "m")))
   (:function second))
 

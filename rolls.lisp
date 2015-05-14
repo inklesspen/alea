@@ -48,3 +48,14 @@
                             explanation
                             (format nil "~a ~@d" explanation mod))))
       (list :result (reduce #'+ (cons mod raw-rolls)) :explanation explanation))))
+
+
+(defun perform-exploding-roll (die-size)
+  (let ((raw-rolls (list)))
+    (loop
+       (when (and raw-rolls (not (eq 6 (first raw-rolls))))
+         (return))
+       (push (randint die-size) raw-rolls))
+    (setf raw-rolls (nreverse raw-rolls))
+    (list :result (reduce #'+ raw-rolls) :explanation (format nil "~{~a~^+~}" raw-rolls))))
+    

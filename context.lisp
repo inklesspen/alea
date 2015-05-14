@@ -171,6 +171,32 @@
   (let ((parsed (or (handle-parse 'standard-roll-with-roll text))))
     (or parsed (call-next-method))))
 
+(defclass fengshui2-context (context) ()
+  (:documentation "Feng Shui 2 has exploding d6s that go boom."))
+
+(defmethod parse-command ((context fengshui2-context) text)
+  (let ((parsed (or (handle-parse 'feng-shui text))))
+    (or parsed (call-next-method))))
+
+(defmethod eval-command ((context fengshui2-context) place requester (op (eql :roll)) args)
+  (let* ((die-spec (first args))
+         (dice-count (car die-spec))
+         (die-size (cdr die-spec))
+         (roll (perform-die-roll dice-count die-size)))
+    roll))
+
+(defmethod eval-command ((context fengshui2-context) plase requester (op (eql :exploding-d6)) args)
+    (perform-exploding-roll 6))
+
+(command-in-context fengshui2-context :feng-shui-roll ("roll 1d6-1d6" "roll 1d6-1d6+1d8" "roll 1d6-1d6+2")
+  (let* ((sub-rolls (mapcar #'(lambda (arg) (eval-command context place requester (car arg) (cdr arg))) args))
+         (results (mapcar #'(lambda (result-list) (getf result-list :result)) sub-rolls))
+         (result (reduce #'+ results))
+         (explanations (mapcar #'(lambda (result-list) (getf result-list :explanation)) sub-rolls))
+         (explanation (format nil "~{~a~^~}" explanations))
+         (explanation (if (eql #\+ (elt explanation 0)) (subseq explanation 1) explanation)))
+    (format nil "~a [~a]" result explanation)))
+
 (defclass ore-context (context) ()
   (:documentation "The ORE context is intended for One-Roll-Engine games such as Reign or Wild Talents."))
 
