@@ -175,7 +175,8 @@
   (:documentation "Feng Shui 2 has exploding d6s that go boom."))
 
 (defmethod parse-command ((context fengshui2-context) text)
-  (let ((parsed (or (handle-parse 'feng-shui text))))
+  (let ((parsed (or (handle-parse 'feng-shui-with-roll text)
+                    (handle-parse 'standard-roll-with-roll text))))
     (or parsed (call-next-method))))
 
 (defmethod eval-command ((context fengshui2-context) place requester (op (eql :roll)) args)

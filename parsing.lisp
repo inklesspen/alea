@@ -59,6 +59,9 @@
                        (first parsed)
                        (second parsed)))))
 
+(esrap:defrule feng-shui-with-roll (and "roll" whitespace feng-shui)
+  (:function third))
+
 (esrap:defrule ore-mod (and (or "+" whitespace) (or (and (esrap:~ "e") integer) (esrap:~ "m")))
   (:function second))
 
