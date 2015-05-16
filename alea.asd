@@ -14,5 +14,6 @@
                (:file "rolls")
                (:file "parsing")
                (:file "tarot")
+               (:file "cli")
                (:file "alea")))
 
